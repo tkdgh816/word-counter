@@ -52,8 +52,8 @@
 
 | 버전 | 입력 | 1회(ms) | 2회(ms) | 3회(ms) | 중앙값(ms) | 전체 결과 동일 |
 |---|---|---|---|---|---|---|
-| 개선 전 | `data/performance/news-repeat-8.csv` |  |  |  |  |  |
-| 개선 후 | 같은 파일 |  |  |  |  |  |
+| 개선 전 | `data/performance/news-repeat-8.csv` | 585 | 598 | 599 | 598 | O |
+| 개선 후 | 같은 파일 | 375 | 386 | 400 | 386 | O |
 
 **완료 기준**: 바꾼 코드와 이유, 측정 조건과 결과를 `PROGRESS.md`에 적습니다. 시간이 줄지 않아도 가능한 원인을 설명하면 의미 있는 실험입니다. 메모리를 비교했다면 측정 도구와 Java 실행 옵션을 기록하고 순간 사용량과 최대 사용량을 구분하세요. 메모리를 줄이는 변경이 항상 시간을 줄이지는 않습니다.
 
@@ -275,7 +275,7 @@ JDBC에서는 문장을 `PreparedStatement`로 준비하고 `?`에 값을 넣어
 ```java
 connection.setAutoCommit(false);                 // 3단계부터: 문장마다 커밋하지 않음
 try (PreparedStatement upsert = connection.prepareStatement(
-        "INSERT INTO word_counts (word, count) VALUES (?, 1) ON DUPLICATE KEY UPDATE count = count + 1")) {
+        "INSERT INTO word_counts (token, count) VALUES (?, 1) ON DUPLICATE KEY UPDATE count = count + 1")) {
     for (String token : tokens) {
         upsert.setString(1, token);
         upsert.addBatch();                       // 4단계부터: 모아 두기. 1~3단계는 executeUpdate()
@@ -301,7 +301,7 @@ connection.commit();                             // 3단계부터: 마지막에 
 | 2 | 토큰마다 `INSERT ... ON DUPLICATE KEY UPDATE` 한 문장. 자동 커밋 | news-1000 | 왕복 2회를 1회로 | 5.6~6.4초 |
 | 3 | 2와 같지만 `setAutoCommit(false)`로 시작해 마지막에 `commit()` 한 번 | news-1000, news-10000 | 커밋마다 디스크에 기록하던 비용 제거. 남는 것은 왕복 | 0.7초, 8초 |
 | 4 | 3과 같지만 `addBatch()`로 모아 5,000개마다 `executeBatch()` | news-10000, 27.3MB | 왕복 횟수 자체를 줄이기 | 0.35초, 15초 |
-| 5 | 파일을 메모리 `Map`으로 먼저 집계한 뒤, 단어별로 한 번씩 `VALUES(count)` 문장을 배치로 | 27.3MB | 계산은 싼 곳에서 하고 DB에는 결과만 저장 | 0.4\~0.6초(메모리만 0.3\~0.5초) |
+| 5 | 파일을 메모리 `Map`으로 먼저 집계한 뒤, 단어별로 한 번씩 `VALUES(count)` 문장을 배치로 | 27.3MB | 계산은 싼 곳에서 하고 DB에는 결과만 저장 | 0.4~0.6초(메모리만 0.3~0.5초) |
 | 6 (선택) | 토큰을 `tokens` 표에 배치로 쌓은 뒤 `INSERT INTO word_counts SELECT token, COUNT(*) FROM tokens GROUP BY token` | 27.3MB | 집계를 DB에 맡기면 어떻게 되는지 | 6~7초(저장 5초 + 집계 1초) |
 
 조회 메뉴도 DB로 구현해보세요. 상위 N개는 `SELECT word, count FROM word_counts ORDER BY count DESC, word LIMIT ?`, 특정 단어는 `SELECT count FROM word_counts WHERE word = ?`입니다. 기본 키가 있는 열로 찾으면 빠르고, `ORDER BY count`는 인덱스가 없어 전체를 정렬하지만 78,309행이면 참고 구현에서 17ms였습니다.
