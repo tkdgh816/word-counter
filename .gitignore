@@ -1,0 +1,17 @@
+# Build and generated output
+target/
+out/
+checkpoints/
+*.class
+
+# Local IDE settings
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Instructor-provided practice inputs are tracked. Keep personal downloads local.
+data/local/
+
+*.code-workspace

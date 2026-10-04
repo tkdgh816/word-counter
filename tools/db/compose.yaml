@@ -1,0 +1,22 @@
+# 심화 7번용 로컬 MySQL. 프로젝트 루트에서 실행합니다.
+#   docker compose -f tools/db/compose.yaml up -d      시작 (처음 한 번 이미지 다운로드)
+#   docker compose -f tools/db/compose.yaml down       중지 (데이터 유지)
+#   docker compose -f tools/db/compose.yaml down -v    중지 + 데이터 삭제
+services:
+  db:
+    image: mysql:8.4
+    container_name: wordcount-db
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: wordcount
+      MYSQL_USER: wordcount
+      MYSQL_PASSWORD: wordcount
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_bin
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - wordcount-db-data:/var/lib/mysql
+
+volumes:
+  wordcount-db-data:

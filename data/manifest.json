@@ -1,0 +1,394 @@
+{
+  "description": "Fixed inputs for the Java word counter assignment; not student results.",
+  "sources": {
+    "ynat-train.json": {
+      "sha256": "e1ceadbcfc654bfbd241ac8170fe825ceeb6e7c0686f05181befeaef778d0031",
+      "url": "https://raw.githubusercontent.com/KLUE-benchmark/KLUE/3efd98708a40ff49251fddde35453f8fbb11f536/klue_benchmark/ynat-v1.1/ynat-v1.1_train.json"
+    },
+    "klue-license.txt": {
+      "sha256": "7abe19ec9bb73b36141b999b861d24ad855e808bafe0f81e84cce28556f6c297",
+      "url": "https://raw.githubusercontent.com/KLUE-benchmark/KLUE/3efd98708a40ff49251fddde35453f8fbb11f536/License.md"
+    },
+    "chatbot.csv": {
+      "sha256": "287eb129695b577321c80ad397bb3c2279164d4ca577874d129fd3db5b30afe2",
+      "url": "https://raw.githubusercontent.com/songys/Chatbot_data/4cf20d13fc46f5037fd1c531cd566e2dd9f72974/ChatbotData.csv"
+    },
+    "chatbot-license.txt": {
+      "sha256": "1d8084ef9ea897ec462ce6c0e538f97967894699aac65c933804062714d3330a",
+      "url": "https://raw.githubusercontent.com/songys/Chatbot_data/4cf20d13fc46f5037fd1c531cd566e2dd9f72974/LICENSE"
+    }
+  },
+  "transformations": {
+    "klue-ynat": "Training split titles in original order; 1-based id plus text, no title normalization; subsets use first N records; many partitions the full data into 16 disjoint slices.",
+    "formats": "First 1000 titles as TXT, simple TSV, and escaped static HTML; original title text retained.",
+    "performance": "All 45678 titles repeated exactly 8 times (365424 records), new sequential ids; many partitions that same sequence into 16 disjoint slices. This is repeated load, not additional real examples.",
+    "chatbot": "All 11823 Q/A/label records retained; UTF-8 without BOM, LF line endings."
+  },
+  "files": [
+    {
+      "path": "klue-ynat/news-1000.csv",
+      "bytes": 71372,
+      "sha256": "b754c250e76c35fbfee333f54f83dec60c03fe0a76291a86d21aaceef8f6f2cb",
+      "records": 1000,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/news-10000.csv",
+      "bytes": 729442,
+      "sha256": "c7dacb2a8fc11790ec82a9c729bf740a2ec1ca24c9952bbf3dac8cd677db9fa6",
+      "records": 10000,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/news-full.csv",
+      "bytes": 3365813,
+      "sha256": "3b37322236f9b7daed7a8c0a9525ef8d2c1b8fb4be9a6c970b1b79492bd8c7f4",
+      "records": 45678,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/many/news-01.csv",
+      "bytes": 207457,
+      "sha256": "add1fff708f099070c94cd5d1e795e05720cc83a677a171022fe83b3c5f58919",
+      "records": 2854,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/many/news-02.csv",
+      "bytes": 207575,
+      "sha256": "81788520bb014d6c8ead77546d8a566c2203b88a2fe68cea7fcece7f3629ad73",
+      "records": 2855,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/many/news-03.csv",
+      "bytes": 209029,
+      "sha256": "3716d236900af2643dd99205921bc427c7bde93d46b0b2cccde7288770607437",
+      "records": 2855,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/many/news-04.csv",
+      "bytes": 210914,
+      "sha256": "899ede6df9ae37aa67e0b5bbc37e215fcf43942393318284676934b8368655b0",
+      "records": 2855,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/many/news-05.csv",
+      "bytes": 211667,
+      "sha256": "18194aeb2336c83bc30f7f4d9a92bcea3b3cbcd614ad88b6285edebceaaf36ac",
+      "records": 2855,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/many/news-06.csv",
+      "bytes": 211325,
+      "sha256": "9f7b8e84f54ddde36d869ae364fca6e868eba78a79ddba4471993e05a5d7e680",
+      "records": 2855,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/many/news-07.csv",
+      "bytes": 211445,
+      "sha256": "013a4f39dad525db0be9189b049ce9f0484ceeb2bd9f2d5218c3752909a7c546",
+      "records": 2855,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/many/news-08.csv",
+      "bytes": 211144,
+      "sha256": "2e86b9410f2969b18823f1db2d58debcda054dc5eb64c0aacf52abc514ff801c",
+      "records": 2855,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/many/news-09.csv",
+      "bytes": 210864,
+      "sha256": "ac6b54794c1823acb5c33e04022f188ff7ad36b9e323d13fc416eb16d94bf451",
+      "records": 2854,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/many/news-10.csv",
+      "bytes": 211860,
+      "sha256": "d73997fb2d8007f28336898c31a081510b369c17681de0ae05e95e62501f3a88",
+      "records": 2855,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/many/news-11.csv",
+      "bytes": 210794,
+      "sha256": "04b9a1394dafc6225ab1c61e149b4bdab3f94455b89cd7c005dc97e2924579d1",
+      "records": 2855,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/many/news-12.csv",
+      "bytes": 211062,
+      "sha256": "4b8a23559e1784f4d82c16e06436dfa73a87fda487f2b695ac91cff6c25c0e2e",
+      "records": 2855,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/many/news-13.csv",
+      "bytes": 211222,
+      "sha256": "c0ed0f8625920359f54da07079e591a755912d71991c48d5c30912ed6dbd14b9",
+      "records": 2855,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/many/news-14.csv",
+      "bytes": 210637,
+      "sha256": "e77b8fec65cc5fdf62e3eb5ced5da5808b46dafef0d60143f29bf96915270584",
+      "records": 2855,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/many/news-15.csv",
+      "bytes": 209066,
+      "sha256": "ff20736c1b757f9a2cd2480d8d3297aa35407549d74deb98c85d110a511abe80",
+      "records": 2855,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/many/news-16.csv",
+      "bytes": 209872,
+      "sha256": "48a56fb9516aa6d16fe084974876980cd2e1014dd656f459f4d519749db6e8e0",
+      "records": 2855,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/news-repeat-8.csv",
+      "bytes": 27269615,
+      "sha256": "6ff64e852411f2dea4be161d98e3d86d6868006959cdaeb98e55c59b66c154b5",
+      "records": 365424,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/many/news-01.csv",
+      "bytes": 1680500,
+      "sha256": "ccffa59d246b59c66f3eeb6274115f2e55bcd91e31f44e133a2458b4bb186960",
+      "records": 22839,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/many/news-02.csv",
+      "bytes": 1685321,
+      "sha256": "ed94c6d921be90379f1e4e3b4a1c7569914fa90f9cf3ad2bfd8d2e7c6a3e0709",
+      "records": 22839,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/many/news-03.csv",
+      "bytes": 1691606,
+      "sha256": "ff4846a77908ecfef25b60a6488bb9e3bfb8053d18ea6b139fb31791d6beb360",
+      "records": 22839,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/many/news-04.csv",
+      "bytes": 1685321,
+      "sha256": "e96083c9d0133b37eca4194e19ca4f3de8c2cfe6015b9b553237c3a73f8dec5c",
+      "records": 22839,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/many/news-05.csv",
+      "bytes": 1705802,
+      "sha256": "8dced0fa41d544a924e6a23328fdc0982e3f3061f43db0d8be82553d9b46275a",
+      "records": 22839,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/many/news-06.csv",
+      "bytes": 1708160,
+      "sha256": "bf371b36811db4afd8ec52be19cbb0f3b53005baa26a99a99ad19f8acf2bb11a",
+      "records": 22839,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/many/news-07.csv",
+      "bytes": 1714445,
+      "sha256": "c83e819231a3ab76ce2773fde3a037c3bc3a1e9803313e206c1e0fc5173c6639",
+      "records": 22839,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/many/news-08.csv",
+      "bytes": 1708160,
+      "sha256": "53f9b08cfc7bb84d5c2fa7175f53dffb306652389a88ee2ca5f77953d432e4cf",
+      "records": 22839,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/many/news-09.csv",
+      "bytes": 1714445,
+      "sha256": "e62a58f3d4c5f076d4bec055ac24171ae20e226adde8f96a4526a3f39e35ef82",
+      "records": 22839,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/many/news-10.csv",
+      "bytes": 1708160,
+      "sha256": "4569800f033b2341edd3e0d78fa9e15b6b2a2e16d6364be9f21d8f95e1e3f606",
+      "records": 22839,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/many/news-11.csv",
+      "bytes": 1714445,
+      "sha256": "53abbeffd0957155aa864cc2912ff70c3f1d18b45dc42ad16263a64680ddbb71",
+      "records": 22839,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/many/news-12.csv",
+      "bytes": 1708160,
+      "sha256": "f97a433c5417440550d6ebc942dd971b1d35a9ce523c86e6c15ce181cbbe282e",
+      "records": 22839,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/many/news-13.csv",
+      "bytes": 1714445,
+      "sha256": "e4fad0f9a4eff936e64218778c93b5553b1100d223ef5f4d0285f6afbe969149",
+      "records": 22839,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/many/news-14.csv",
+      "bytes": 1708160,
+      "sha256": "3b4ce7bf690a92b8ad125f0cc5eeb3f105246f9098fb9d81ac5b5fc20cdbba2c",
+      "records": 22839,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/many/news-15.csv",
+      "bytes": 1714445,
+      "sha256": "2288650b8fb4c1397ca8327fa9268623962cd1a9f4f790680d40810de27ec3a9",
+      "records": 22839,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "performance/many/news-16.csv",
+      "bytes": 1708160,
+      "sha256": "7fd9232cefcda49cd092f947727f205e185752078a1e037dcec6102ae0ea0881",
+      "records": 22839,
+      "text_columns": [
+        "text"
+      ]
+    },
+    {
+      "path": "klue-ynat/formats/news-1000.txt",
+      "bytes": 67471,
+      "sha256": "342f82b1a24d39e5a537e227c945c137a9661631b879a181e6b134b7566b836d",
+      "records": 1000
+    },
+    {
+      "path": "klue-ynat/formats/news-1000.tsv",
+      "bytes": 71376,
+      "sha256": "62f2d0f4862d0908eb78534e62024867bab34a92730ea7a252518c6452efb022",
+      "records": 1000,
+      "text_columns": [
+        "document"
+      ]
+    },
+    {
+      "path": "klue-ynat/formats/news-1000.html",
+      "bytes": 74695,
+      "sha256": "20d010fc2560933694b0d3fb10acbaa3c19eab15b02cb825a21f45eaab8f3bfc",
+      "records": 1000
+    },
+    {
+      "path": "chatbot/chatbot.csv",
+      "bytes": 878020,
+      "sha256": "2bd0d2ad7bb0342e729cdeeb92e7866c8b7bde5a415054465b75ea2dadcbc1ae",
+      "records": 11823,
+      "text_columns": [
+        "Q",
+        "A"
+      ]
+    },
+    {
+      "path": "licenses/KLUE-CC-BY-SA-4.0.txt",
+      "bytes": 20131,
+      "sha256": "7abe19ec9bb73b36141b999b861d24ad855e808bafe0f81e84cce28556f6c297"
+    },
+    {
+      "path": "licenses/Chatbot-MIT.txt",
+      "bytes": 1068,
+      "sha256": "1d8084ef9ea897ec462ce6c0e538f97967894699aac65c933804062714d3330a"
+    }
+  ]
+}
