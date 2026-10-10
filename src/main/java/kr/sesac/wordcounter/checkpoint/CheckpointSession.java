@@ -23,6 +23,8 @@ public class CheckpointSession implements AutoCloseable {
 
     private final Map<String, CheckpointMetadata> metadataByOriginalPath;
 
+    private final Object lock = new Object();
+
     private CheckpointSession(Map<String, CheckpointMetadata> metadataByOriginalPath) {
         this.metadataByOriginalPath = metadataByOriginalPath;
     }
@@ -50,35 +52,40 @@ public class CheckpointSession implements AutoCloseable {
             filePath = filePath.toAbsolutePath().normalize();
             CheckpointMetadata currentMetadata = CheckpointMetadata.create(filePath);
 
-            CheckpointMetadata savedMetadata = metadataByOriginalPath.get(filePath.toString());
-            if (savedMetadata != null && savedMetadata.isReusableFor(currentMetadata)) {
-                return getCheckPoint(savedMetadata);
+            synchronized (lock) {
+                CheckpointMetadata savedMetadata = metadataByOriginalPath.get(filePath.toString());
+                if (savedMetadata != null && savedMetadata.isReusableFor(currentMetadata)) {
+                    return getCheckPoint(savedMetadata);
+                }
             }
         } catch (IOException e) {
         }
         return Optional.empty();
     }
 
-    public void save(Path path, FileTokenCountResult tokenCounter) {
+    public void save(FileTokenCountResult fileTokenCountResult) {
         try {
-            CheckpointMetadata metadata = CheckpointMetadata.create(path);
+            CheckpointMetadata metadata = CheckpointMetadata.create(fileTokenCountResult.getFilePath());
             String originalFilePathString = metadata.originalFilePath();
             Path countsFilePath = Path.of(metadata.countsFilePath());
 
-            TsvWriter.save(countsFilePath, TokenCount.class, tokenCounter.getTokenCounts(), CHECKPOINT_HEADER_NAMES);
-            CheckpointMetadata previousMetadata = metadataByOriginalPath.put(originalFilePathString, metadata);
-
-            try {
-                saveMetadata();
-            } catch (IOException e) {
-                // 메타데이터 저장 실패한 경우
-                if (previousMetadata == null) {
-                    metadataByOriginalPath.remove(originalFilePathString);
-                } else {
-                    metadataByOriginalPath.put(originalFilePathString, previousMetadata);
+            TsvWriter.save(countsFilePath, TokenCount.class, fileTokenCountResult.getTokenCounts(), CHECKPOINT_HEADER_NAMES);
+            synchronized (lock) {
+                CheckpointMetadata previousMetadata = metadataByOriginalPath.put(originalFilePathString, metadata);
+                try {
+                    saveMetadata();
+                } catch (IOException e) {
+                    // 메타데이터 저장 실패한 경우
+                    if (previousMetadata == null) {
+                        metadataByOriginalPath.remove(originalFilePathString);
+                    } else {
+                        metadataByOriginalPath.put(originalFilePathString, previousMetadata);
+                    }
+                    throw new CheckpointException("체크포인트를 만들 수 없습니다.", e);
                 }
-                throw new CheckpointException("체크포인트를 만들 수 없습니다.", e);
             }
+
+
         } catch (IOException e) {
             throw new CheckpointException("체크포인트를 만들 수 없습니다.", e);
         }
@@ -92,7 +99,7 @@ public class CheckpointSession implements AutoCloseable {
                 return Optional.empty();
             }
 
-            CheckpointFileTokenCounter tokenCounter = new CheckpointFileTokenCounter();
+            CheckpointFileTokenCounter tokenCounter = new CheckpointFileTokenCounter(Path.of(metadata.originalFilePath()));
             TsvReader checkpointReader = new TsvReader(List.of(CHECKPOINT_HEADER_NAMES));
             checkpointReader.readRecords(countsFile, record -> {
                 String token = record.get(CHECKPOINT_HEADER_NAMES[0]);
@@ -114,7 +121,9 @@ public class CheckpointSession implements AutoCloseable {
     @Override
     public void close() {
         try {
-            saveMetadata();
+            synchronized (lock) {
+                saveMetadata();
+            }
         } catch (IOException e) {
             throw new CheckpointException("메타데이터 파일을 저장하지 못했습니다.", e);
         }

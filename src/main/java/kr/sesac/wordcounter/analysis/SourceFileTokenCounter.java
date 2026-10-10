@@ -43,6 +43,11 @@ class SourceFileTokenCounter implements FileTokenCountResult {
     }
 
     @Override
+    public Path getFilePath() {
+        return filePath;
+    }
+
+    @Override
     public List<TokenCount> getTokenCounts() {
         return countsByToken.entrySet().stream()
                 .map(entry -> new TokenCount(entry.getKey(), entry.getValue()))

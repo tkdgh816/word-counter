@@ -20,6 +20,7 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class Analyzer implements Analysis {
     private final TextTokenizer tokenizer;
@@ -28,7 +29,8 @@ public class Analyzer implements Analysis {
     private long totalTokenCount;    // 전체 분석 단어 횟수
     private int successfulFileCount;   // 지원 파일 분석 성공 횟수
     private final AnalysisSummary analysisSummary;
-    private final List<FileAnalysisFailure> failures = new ArrayList<>();
+    private final List<FileAnalysisFailure> fileFailures = Collections.synchronizedList(new ArrayList<>());
+    private final AtomicReference<Throwable> analysisFailure = new AtomicReference<>(null);
 
     public static Analyzer analyze(String pathString, TextTokenizer tokenizer, TokenCountRepository repository, ProcessingMode processingMode, boolean useCheckpoint) throws IOException, AnalysisException, RepositoryException {
         return new Analyzer(pathString, tokenizer, repository, processingMode, useCheckpoint);
@@ -110,7 +112,7 @@ public class Analyzer implements Analysis {
         // 분석 처리 시간 기록
         elapsedNanoTime = System.nanoTime() - elapsedNanoTime;
 
-        FileAnalysisSummary fileSummary = new FileAnalysisSummary(readerKindsByPath.size(), successfulFileCount, skippedFileCount, List.copyOf(failures));
+        FileAnalysisSummary fileSummary = new FileAnalysisSummary(readerKindsByPath.size(), successfulFileCount, skippedFileCount, List.copyOf(fileFailures));
         WordAnalysisSummary wordSummary = new WordAnalysisSummary(totalTokenCount, repository.getUniqueCount());
         analysisSummary = new AnalysisSummary(
                 inputPath,
@@ -125,65 +127,60 @@ public class Analyzer implements Analysis {
     }
 
     private void analyzeSequential(Map<Path, TextReaderKind> readerKindsByPath) {
-        for (var entry : readerKindsByPath.entrySet()) {
-            Path filePath = entry.getKey();
-            // 파일 유형에 해당하는 TextReader 가져옴
-            TextReader textReader = entry.getValue().createReader();
-
-            // 파일을 분석하고 결과를 집계, 실패 시 실패 목록에 추가
-            try {
-                FileTokenCountResult fileTokenCountResult = SourceFileTokenCounter.countTokens(filePath, textReader, tokenizer);
-                integrate(fileTokenCountResult);
-            } catch (TextReaderException e) {
-                failures.add(new FileAnalysisFailure(filePath, e.getMessage()));
-            }
+        try {
+            readerKindsByPath.forEach((filePath, readerKind) ->
+                    analyzeForEachFile(filePath, readerKind).ifPresent(this::integrate));
+        } catch (RuntimeException e) {
+            throw new AnalysisException("분석 작업이 실패했습니다.", e);
         }
     }
 
     private void analyzeFixedThreadPool(Map<Path, TextReaderKind> readerKindsByPath) throws AnalysisException {
-        // 파일 경로와 파일 분석 결과
-        Map<Path, Future<FileTokenCountResult>> futuresByFilePath = new HashMap<>();
-
         // 적절한 스레드 개수를 계산하여 스레드 풀 생성
         int threadCount = Math.min(readerKindsByPath.size(), MAX_THREAD_COUNT);
         try (ExecutorService executorService = Executors.newFixedThreadPool(threadCount)) {
-            for (var entry : readerKindsByPath.entrySet()) {
-                Path filePath = entry.getKey();
-
-                // 개별 파일 분석
-                TextReader textReader = entry.getValue().createReader();
-                Future<FileTokenCountResult> future = executorService.submit(() -> SourceFileTokenCounter.countTokens(filePath, textReader, tokenizer));
-
-                futuresByFilePath.put(filePath, future);
-            }
-        }
-
-        for (var entry : futuresByFilePath.entrySet()) {
-            Path filePath = entry.getKey();
-            Future<FileTokenCountResult> future = entry.getValue();
+            var cfs = readerKindsByPath.entrySet().stream()
+                    .map(entry -> CompletableFuture
+                            .supplyAsync(() -> {
+                                if (analysisFailure.get() != null) {
+                                    throw new CancellationException("전체 분석 실패로 작업 중단됨");
+                                }
+                                return analyzeForEachFile(entry.getKey(), entry.getValue());
+                            }, executorService)
+                            // 파일 분석 결과를 얻으면
+                            .thenAccept(result -> result.ifPresent(this::integrate))
+                            // 예외가 발생하면(통합 집계 중 예외 혹은 그로 인해 다른 작업 취소 시)
+                            .whenComplete((result, throwable) -> {
+                                if (throwable != null) {
+                                    analysisFailure.compareAndSet(null, throwable);
+                                }
+                            }))
+                    .toArray(CompletableFuture[]::new);
 
             try {
-                // 개별 파일 분석 작업 완료를 기다리고 결과 통합
-                FileTokenCountResult fileTokenCountResult = future.get();
-                integrate(fileTokenCountResult);
+                CompletableFuture.allOf(cfs).get();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new AnalysisException("분석 작업이 중단되었습니다.", e);
             } catch (ExecutionException e) {
-                // 개별 파일 분석 실패 시 실패 목록에 추가
-                if (e.getCause() instanceof TextReaderException textReaderException) {
-                    failures.add(new FileAnalysisFailure(filePath, textReaderException.getMessage()));
-                    continue;
-                }
-                throw new AnalysisException("분석 작업이 실패했습니다.", e.getCause());
-            } catch (CancellationException e) {
-                throw new AnalysisException("분석 작업이 취소되었습니다.", e);
+                throw new AnalysisException("분석 작업이 실패했습니다.", e);
             }
         }
     }
 
+    // 파일을 분석하고 결과를 집계, 실패 시 실패 목록에 추가
+    private Optional<FileTokenCountResult> analyzeForEachFile(Path filePath, TextReaderKind textReaderKind) {
+        try {
+            FileTokenCountResult result = SourceFileTokenCounter.countTokens(filePath, textReaderKind.createReader(), tokenizer);
+            return Optional.of(result);
+        } catch (TextReaderException e) {
+            fileFailures.add(new FileAnalysisFailure(filePath, e.getMessage()));
+            return Optional.empty();
+        }
+    }
+
     // 각 파일 분석 결과를 통합하여 집계
-    private void integrate(FileTokenCountResult fileTokenCountResult) {
+    private synchronized void integrate(FileTokenCountResult fileTokenCountResult) {
         if (fileTokenCountResult != null) {
             repository.addAll(fileTokenCountResult.getTokenCounts());
             totalTokenCount += fileTokenCountResult.getTotalTokenCount();
@@ -238,109 +235,99 @@ public class Analyzer implements Analysis {
     // 체크포인트 사용 시 분석
     private void analyzeSequentialCheckpoint(Map<Path, TextReaderKind> readerKindsByPath) {
         try (CheckpointSession checkpointSession = CheckpointSession.open()) {
-            for (var entry : readerKindsByPath.entrySet()) {
-                Path filePath = entry.getKey();
+            try {
+                readerKindsByPath.forEach((filePath, readerKind) -> {
+                    checkpointSession.restore(filePath).ifPresentOrElse(
+                            // 체크포인트 있는 경우 바로 집계
+                            this::integrate,
+                            // 체크포인트 없는 경우
+                            () -> {
+                                System.out.println("새 분석 시작: " + filePath);
 
-                checkpointSession.restore(filePath).ifPresentOrElse(
-                        this::integrate,
-                        () -> {
-                            System.out.println("새 분석 시작: " + filePath);
-                            // 파일 유형에 해당하는 TextReader 가져옴
-                            TextReader textReader = entry.getValue().createReader();
-
-                            // 파일을 분석하고 결과를 집계, 실패 시 실패 목록에 추가
-                            try {
-                                FileTokenCountResult fileTokenCountResult = SourceFileTokenCounter.countTokens(filePath, textReader, tokenizer);
-                                integrate(fileTokenCountResult);
-                                checkpointSession.save(filePath, fileTokenCountResult);
-                            } catch (TextReaderException e) {
-                                failures.add(new FileAnalysisFailure(filePath, e.getMessage()));
-                            } catch (CheckpointException e) {
-                                // 분석 성공했지만 체크포인트 저장에 실패한 경우
-                                System.out.println("체크포인트 저장 실패: " + filePath);
-                                System.out.println("분석 결과는 집계되었습니다.");
+                                // 원본 파일 분석 시작
+                                analyzeForEachFile(filePath, readerKind).ifPresent(result -> integrateAndSaveCheckpoint(checkpointSession, result));
                             }
-                        }
-                );
+                    );
+                });
+            } catch (RuntimeException e) {
+                throw new AnalysisException("분석 작업이 실패했습니다.", e);
             }
         } catch (CheckpointException e) {
-            // 세션 종료 시 체크포인트 메타데이터 저장 실패는 분석 결과에 영향을 주지 않음
+            // 종료 시 체크포인트 메타데이터 저장 실패는 분석 결과에 영향을 주지 않음
             System.out.println("체크포인트 메타데이터 파일 저장에 실패했습니다. 분석 결과는 사용할 수 있습니다.");
         }
     }
 
     private void analyzeFixedThreadPoolCheckpoint(Map<Path, TextReaderKind> readerKindsByPath) throws AnalysisException {
-        record FileTokenCounterResult(FileTokenCountResult fileTokenCounter, boolean fromCheckpoint) {
+        record AnalyzedFileTokenCountResult(Optional<FileTokenCountResult> result, boolean fromCheckpoint) {
         }
-
-        // 파일 경로와 파일 분석 결과
-        Map<Path, Future<FileTokenCounterResult>> futuresByFilePath = new HashMap<>();
 
         try (CheckpointSession checkpointSession = CheckpointSession.open()) {
             // 적절한 스레드 개수를 계산하여 스레드 풀 생성
             int threadCount = Math.min(readerKindsByPath.size(), MAX_THREAD_COUNT);
             try (ExecutorService executorService = Executors.newFixedThreadPool(threadCount)) {
-                for (var entry : readerKindsByPath.entrySet()) {
-                    Path filePath = entry.getKey();
+                var cfs = readerKindsByPath.entrySet().stream()
+                        .map(entry -> CompletableFuture
+                                .supplyAsync(() -> {
+                                    if (analysisFailure.get() != null) {
+                                        throw new CancellationException("전체 분석 실패로 작업 중단됨");
+                                    }
 
-                    // 개별 파일 분석
-                    Future<FileTokenCounterResult> future = executorService.submit(() ->
-                    {
-                        Optional<FileTokenCountResult> restored = checkpointSession.restore(filePath);
-                        if (restored.isPresent()) {
-                            return new FileTokenCounterResult(restored.get(), true);
-                        }
+                                    Path filePath = entry.getKey();
 
-                        System.out.println("새 분석 시작: " + filePath);
-                        // 파일 유형에 해당하는 TextReader 가져옴
-                        TextReader textReader = entry.getValue().createReader();
+                                    var restored = checkpointSession.restore(filePath);
+                                    if (restored.isPresent()) {
+                                        return new AnalyzedFileTokenCountResult(restored, true);
+                                    }
 
-                        // 파일을 분석하고 결과를 집계, 실패 시 실패 목록에 추가
-                        FileTokenCountResult fileTokenCountResult = SourceFileTokenCounter.countTokens(filePath, textReader, tokenizer);
-                        return new FileTokenCounterResult(fileTokenCountResult, false);
-                    });
-
-                    futuresByFilePath.put(filePath, future);
-                }
-            }
-
-
-            for (var entry : futuresByFilePath.entrySet()) {
-                Path filePath = entry.getKey();
-                Future<FileTokenCounterResult> future = entry.getValue();
-
+                                    System.out.println("새 분석 시작: " + filePath);
+                                    return new AnalyzedFileTokenCountResult(analyzeForEachFile(filePath, entry.getValue()), false);
+                                }, executorService)
+                                // 파일 분석 결과를 얻으면
+                                .thenAccept(analyzed ->
+                                        analyzed.result().ifPresent(result -> {
+                                            if (analyzed.fromCheckpoint()) {
+                                                // 복원된 결과는 집계만 수행
+                                                integrate(result);
+                                            } else {
+                                                // 새 분석 결과는 집계 후 체크포인트 저장
+                                                integrateAndSaveCheckpoint(checkpointSession, result);
+                                            }
+                                        })
+                                )
+                                // 예외가 발생하면(통합 집계 중 예외 혹은 그로 인해 다른 작업 취소 시)
+                                .whenComplete((result, throwable) -> {
+                                    if (throwable != null) {
+                                        analysisFailure.compareAndSet(null, throwable);
+                                    }
+                                }))
+                        .toArray(CompletableFuture[]::new);
                 try {
-                    // 개별 파일 분석 작업 완료를 기다리고 결과 통합
-                    FileTokenCounterResult result = future.get();
-                    integrate(result.fileTokenCounter());
-                    if (!result.fromCheckpoint()) {
-                        try {
-                            checkpointSession.save(filePath, result.fileTokenCounter());
-                        } catch (CheckpointException e) {
-                            // 체크포인트 저장 실패하더라도 분석 결과는 이미 집계됨
-                            // 다음 파일 결과 처리 계속
-                            System.out.println("체크포인트 저장 실패: " + filePath);
-                            System.out.println("분석 결과는 집계되었습니다.");
-                        }
-                    }
+                    CompletableFuture.allOf(cfs).get();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     throw new AnalysisException("분석 작업이 중단되었습니다.", e);
                 } catch (ExecutionException e) {
-                    // 개별 파일 분석 실패 시 실패 목록에 추가
-                    Throwable cause = e.getCause();
-                    if (cause instanceof TextReaderException textReaderException) {
-                        failures.add(new FileAnalysisFailure(filePath, textReaderException.getMessage()));
-                        continue;
-                    }
-                    throw new AnalysisException("분석 작업이 실패했습니다.", e.getCause());
-                } catch (CancellationException e) {
-                    throw new AnalysisException("분석 작업이 취소되었습니다.", e);
+                    throw new AnalysisException("분석 작업이 실패했습니다.", e);
                 }
             }
         } catch (CheckpointException e) {
-            // 세션 종료 시 체크포인트 메타데이터 저장 실패는 분석 결과에 영향을 주지 않음
+            // 종료 시 체크포인트 메타데이터 저장 실패는 분석 결과에 영향을 주지 않음
             System.out.println("체크포인트 메타데이터 파일 저장에 실패했습니다. 분석 결과는 사용할 수 있습니다.");
+        }
+    }
+
+    private void integrateAndSaveCheckpoint(CheckpointSession checkpointSession, FileTokenCountResult fileTokenCountResult) {
+        // 분석 결과를 집계
+        integrate(fileTokenCountResult);
+
+        // 분석 및 집계가 성공하면 체크포인트에 기록, 기록 실패하더라도 전체 분석 실패는 아님
+        try {
+            checkpointSession.save(fileTokenCountResult);
+        } catch (CheckpointException e) {
+            // 분석 성공했지만 체크포인트 저장에 실패한 경우
+            System.out.println("체크포인트 저장 실패: " + fileTokenCountResult.getFilePath());
+            System.out.println("분석 결과는 집계되었습니다.");
         }
     }
 }
