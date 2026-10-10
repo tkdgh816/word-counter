@@ -27,7 +27,7 @@ public class Main {
 
     // 심화 3번
     // 분석 완료한 파일의 단어별 결과를 저장하는 체크포인트 사용 (사용 -> true, 사용 안 함 -> false)
-    private static final boolean USE_CHECKPOINT = false;
+    private static final boolean USE_CHECKPOINT = true;
 
     // 심화 7번
     // 단어별 횟수 저장 방식 선택 (메모리 -> IN_MEMORY, 데이터베이스 -> JDBC)

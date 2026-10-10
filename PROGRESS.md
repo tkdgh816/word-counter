@@ -14,7 +14,7 @@
   - 결과 저장소: `InMemoryRepository`
   - 체크포인트: `CheckpointMode.DISABLED`
   - 결과 저장 위치: `out/counts.tsv`
-
+ 
 ## 2. 구현한 기능
 
 | 기능 | 상태(완료·진행 중·미구현) | 확인한 입력과 결과 |
